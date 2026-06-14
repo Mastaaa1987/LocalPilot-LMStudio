@@ -83,10 +83,12 @@ namespace LocalPilot.Chat
         // Design tokens for rendering logic
         private static readonly FontFamily UIFont      = new FontFamily("Segoe UI");
         private static readonly FontFamily ConsoleFont = new FontFamily("Consolas");
+        private readonly ScaleTransform _gridScaleTransform = new ScaleTransform();
 
         public LocalPilotChatControl()
         {
             InitializeComponent();
+            RootGrid.LayoutTransform = _gridScaleTransform;
             _sessionViewModel = new ChatSessionViewModel();
             _agentTurnCoordinator = new AgentTurnCoordinator();
             _agentUiRenderer = new AgentUiRenderer();
@@ -297,6 +299,10 @@ namespace LocalPilot.Chat
             _scanCts?.Cancel();
             _scanCts?.Dispose();
             _scanCts = null;
+
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
         }
 
         private ScrollViewer _scrollViewer;
@@ -334,10 +340,65 @@ namespace LocalPilot.Chat
 
         private void OnThemeChanged(ThemeChangedEventArgs e) => UpdateBrushes();
 
+        [System.Runtime.InteropServices.DllImport("user32.dll", CharSet = System.Runtime.InteropServices.CharSet.Auto, ExactSpelling = true)]
+        private static extern short GetKeyState(int keyCode);
+
+        private bool IsCtrlPressed()
+        {
+            return (Keyboard.Modifiers & ModifierKeys.Control) != 0 ||
+                   Keyboard.IsKeyDown(Key.LeftCtrl) ||
+                   Keyboard.IsKeyDown(Key.RightCtrl) ||
+                   (GetKeyState(0x11) & 0x8000) != 0;
+        }
+
+        protected override void OnPreviewMouseWheel(MouseWheelEventArgs e)
+        {
+            bool isCtrl = IsCtrlPressed();
+
+            if (isCtrl)
+            {
+                e.Handled = true;
+                double zoomDelta = e.Delta > 0 ? 0.05 : -0.05;
+                double newZoom = Math.Max(0.5, Math.Min(3.0, LocalPilotSettings.Instance.ZoomFactor + zoomDelta));
+                
+                if (Math.Abs(newZoom - LocalPilotSettings.Instance.ZoomFactor) > 0.01)
+                {
+                    LocalPilotSettings.Instance.ZoomFactor = newZoom;
+                    LocalPilot.Options.SettingsPersistence.Save(LocalPilotSettings.Instance);
+                    UpdateBrushes();
+                }
+            }
+            else
+            {
+                base.OnPreviewMouseWheel(e);
+            }
+        }
+
         private void UpdateBrushes()
         {
             try
             {
+                // Dynamic Font Scaling Resolution
+                double vsFontSize = 11.5;
+                if (Application.Current.TryFindResource(VsFonts.CaptionFontSizeKey) is double doubleSize)
+                {
+                    vsFontSize = doubleSize;
+                }
+                else if (Application.Current.TryFindResource(VsFonts.CaptionFontSizeKey) is float floatSize)
+                {
+                    vsFontSize = (double)floatSize;
+                }
+                
+                double vsScale = vsFontSize / 11.5;
+                double userZoom = LocalPilotSettings.Instance.ZoomFactor;
+                double finalScale = vsScale * userZoom;
+                
+                // Clamp scale factor to a safe range
+                finalScale = Math.Max(0.5, Math.Min(3.0, finalScale));
+                
+                _gridScaleTransform.ScaleX = finalScale;
+                _gridScaleTransform.ScaleY = finalScale;
+
                 // Base theme brushes from Visual Studio
                 var toolWindowBg = Application.Current.FindResource(VsBrushes.ToolWindowBackgroundKey) as SolidColorBrush;
                 if (toolWindowBg == null) return;

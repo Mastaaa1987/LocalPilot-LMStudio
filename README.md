@@ -189,7 +189,18 @@ Since **LocalPilot** runs Large Language Models (LLMs) **entirely on your local 
 
 ## 📜 Release History
 
-### 🚀 v1.9.1 - The Stability & Hardening Update (latest)
+### 🚀 v1.9.5 - The Accessibility & Resiliency Update (latest)
+**"Dynamic font zoom, self-contained SQLite integration, and robust database parsing."**
+
+- **🔍 Zoom & Font Scaling Support ([#44](https://github.com/FutureStackSolution/LocalPilot/issues/44))**: Resolved accessibility and text sizing issues. The Chat window now integrates seamlessly with Visual Studio environment fonts and supports interactive dynamic zoom via `Ctrl + Mouse Wheel`.
+- **💬 Conversational Smart Context Bypass ([#25](https://github.com/FutureStackSolution/LocalPilot/issues/25))**: When typing short, friendly greetings (e.g., "hi", "hello", "thanks"), LocalPilot now skips heavy context retrieval (workspace maps, active code snippets, dependencies). This saves massive context token usage and results in lightning-fast response times.
+- **⚙️ User-Configurable Request Timeout ([#42](https://github.com/FutureStackSolution/LocalPilot/issues/42))**: Added `RequestTimeoutSeconds` in the LocalPilot settings page, allowing users to customize request timeouts or let them auto-scale to accommodate slower local model inferences.
+- **🗄️ SQLite Connection & Packaging Hardening ("Batteries Included") ([#41](https://github.com/FutureStackSolution/LocalPilot/issues/41))**: Bundled all critical SQLite dependencies (`SQLitePCLRaw.core.dll`, `SQLitePCLRaw.batteries_v2.dll`) directly within the VSIX package to prevent runtime interop exceptions, backed by dynamic SQLite environment initialization.
+- **🛡️ Watcher Cleanup & Cancellation Safety ([#40](https://github.com/FutureStackSolution/LocalPilot/issues/40))**: Avoided memory and event listener leaks by adding automated directory watcher disposal when switching or closing solutions, and resolved thread-interruption crashes related to active cancellation token disposal.
+- **📅 Culture-Invariant Date Parsing ([#39](https://github.com/FutureStackSolution/LocalPilot/issues/39))**: Fixed database synchronization errors by standardizing SQLite `LastIndexed` timestamp fields to a culture-invariant format (`yyyy-MM-dd HH:mm:ss`) combined with resilient parsing fallbacks.
+
+
+### 🚀 v1.9.1 - The Stability & Hardening Update
 **"Dynamic execution, resilient semantic refactoring, and a hardened agentic core."**
 
 - **⚡ Dynamic Timeout Engine**: Implemented a task-complexity-aware timeout system that automatically scales from 60s to 300s for deep refactoring tasks.

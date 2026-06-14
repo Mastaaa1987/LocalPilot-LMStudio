@@ -59,6 +59,8 @@ namespace LocalPilot.Settings
         public int    ContextWindowSize   { get; set; } = 4096;
         /// <summary>Ollama num_predict: Max tokens the model will generate per turn. 1024 is plenty for chat + completions.</summary>
         public int    MaxOutputTokens     { get; set; } = 1024;
+        /// <summary>Ollama request timeout in seconds. 0 uses automatic dynamic calculation.</summary>
+        public int    RequestTimeoutSeconds { get; set; } = 0;
 
         // ── Agent ─────────────────────────────────────────────────────────────
         public bool   AutonomousModeEnabled    { get; set; } = true;
@@ -79,6 +81,7 @@ namespace LocalPilot.Settings
         public string AccentColor        { get; set; } = "#7C6AF7";    // purple
         public bool   ShowStatusBar      { get; set; } = true;
         public bool   EnableLogging      { get; set; } = false;
+        public double ZoomFactor          { get; set; } = 1.0;
 
         // ── Singleton ─────────────────────────────────────────────────────────
         private static LocalPilotSettings _instance;

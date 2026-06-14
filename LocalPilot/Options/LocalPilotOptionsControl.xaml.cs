@@ -27,6 +27,10 @@ namespace LocalPilot.Options
 
         private void OnLoaded(object sender, RoutedEventArgs e)
         {
+            if (_cts == null)
+            {
+                _cts = new CancellationTokenSource();
+            }
             _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 await InitializeInternalAsync();
@@ -48,8 +52,8 @@ namespace LocalPilot.Options
         {
             _cts?.Cancel();
             _cts?.Dispose();
+            _cts = null;
         }
-
         private void UpdateBrushes() { }
 
         private async Task InitializeInternalAsync()
@@ -94,6 +98,7 @@ namespace LocalPilot.Options
             TxtChatHistory.Text       = s.ChatHistoryMaxItems.ToString();
             TxtNumCtx.Text            = s.ContextWindowSize.ToString();
             TxtNumPredict.Text        = s.MaxOutputTokens.ToString();
+            TxtRequestTimeout.Text    = s.RequestTimeoutSeconds.ToString();
 
             // Populate model combos with current value; 
             // full list populated after async fetch
@@ -159,6 +164,7 @@ namespace LocalPilot.Options
                     if (TxtChatHistory != null && int.TryParse(TxtChatHistory.Text, out int ch)) s.ChatHistoryMaxItems = ch;
                     if (TxtNumCtx != null && int.TryParse(TxtNumCtx.Text, out int nc) && nc >= 512) s.ContextWindowSize = nc;
                     if (TxtNumPredict != null && int.TryParse(TxtNumPredict.Text, out int np) && np >= 128) s.MaxOutputTokens = np;
+                    if (TxtRequestTimeout != null && int.TryParse(TxtRequestTimeout.Text, out int rt) && rt >= 0) s.RequestTimeoutSeconds = rt;
                 }
 
                 // Persist to disk
@@ -166,9 +172,9 @@ namespace LocalPilot.Options
             });
         }
 
-        // ── Event Handlers ────────────────────────────────────────────────────
         private void BtnTestConnection_Click(object sender, RoutedEventArgs e)
         {
+            if (_cts == null) _cts = new CancellationTokenSource();
             _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 try
@@ -203,6 +209,7 @@ namespace LocalPilot.Options
                         SetConnectionStatus(true);
                         
                         // Try to reload models immediately if connected
+                        if (_cts == null) _cts = new CancellationTokenSource();
                         await LoadModelsAsync(url, _cts.Token);
 
                         MessageBox.Show("Successfully connected to Ollama!", "LocalPilot",
@@ -234,6 +241,7 @@ namespace LocalPilot.Options
 
         private void BtnRefreshModels_Click(object sender, RoutedEventArgs e)
         {
+            if (_cts == null) _cts = new CancellationTokenSource();
             _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
                 try
@@ -253,6 +261,7 @@ namespace LocalPilot.Options
             _isSaving = true;
             BtnSave.IsEnabled = false;
 
+            if (_cts == null) _cts = new CancellationTokenSource();
             var token = _cts.Token;
             _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {

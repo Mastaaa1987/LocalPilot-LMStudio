@@ -65,6 +65,10 @@ namespace LocalPilot.Services
                 if (_solutionRoot != currentRoot)
                 {
                     LocalPilotLogger.Log($"Solution changed. Active root: {currentRoot}", LogCategory.Agent);
+                    
+                    // Dispose old watcher if switching solutions
+                    DisposeWatcher();
+
                     _solutionRoot = currentRoot;
                     
                     // Legacy migration check
@@ -151,7 +155,20 @@ namespace LocalPilot.Services
                         {
                             if (await reader.IsDBNullAsync(0).ConfigureAwait(false)) continue;
                             string path = reader.GetString(0);
-                            DateTime lastMod = await reader.IsDBNullAsync(1).ConfigureAwait(false) ? DateTime.MinValue : reader.GetDateTime(1);
+                            
+                            DateTime lastMod = DateTime.MinValue;
+                            if (!await reader.IsDBNullAsync(1).ConfigureAwait(false))
+                            {
+                                string dateStr = reader.GetString(1);
+                                if (!string.IsNullOrEmpty(dateStr))
+                                {
+                                    if (!DateTime.TryParse(dateStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out lastMod))
+                                    {
+                                        DateTime.TryParse(dateStr, out lastMod);
+                                    }
+                                }
+                            }
+                            
                             string hash = await reader.IsDBNullAsync(2).ConfigureAwait(false) ? "" : reader.GetString(2);
                             dict[path.ToLowerInvariant()] = (lastMod, hash);
                         }
@@ -276,7 +293,7 @@ namespace LocalPilot.Services
                                 // 2. File Entry
                                 pFileP.Value = item.path;
                                 pFileC.Value = item.content;
-                                pFileL.Value = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                pFileL.Value = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
                                 pFileH.Value = hash;
                                 await insFileCmd.ExecuteNonQueryAsync(ct);
 
@@ -559,6 +576,26 @@ namespace LocalPilot.Services
             if (!string.IsNullOrEmpty(_solutionRoot) && fullPath.StartsWith(_solutionRoot, StringComparison.OrdinalIgnoreCase))
                 return fullPath.Substring(_solutionRoot.Length).TrimStart(Path.DirectorySeparatorChar);
             return fullPath.TrimStart(Path.DirectorySeparatorChar);
+        }
+
+        private void DisposeWatcher()
+        {
+            try
+            {
+                if (_watcher != null)
+                {
+                    _watcher.EnableRaisingEvents = false;
+                    _watcher.Dispose();
+                    _watcher = null;
+                }
+                if (_watcherCts != null)
+                {
+                    _watcherCts.Cancel();
+                    _watcherCts.Dispose();
+                    _watcherCts = null;
+                }
+            }
+            catch { }
         }
 
         private void SetupIncrementalWatcher(OllamaService ollama)

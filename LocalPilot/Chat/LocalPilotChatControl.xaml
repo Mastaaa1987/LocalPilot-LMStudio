@@ -547,7 +547,7 @@
 
     </UserControl.Resources>
 
-    <Grid Background="{DynamicResource LpWindowBgBrush}">
+    <Grid x:Name="RootGrid" Background="{DynamicResource LpWindowBgBrush}">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto"/>  <!-- Header -->
             <RowDefinition Height="*"/>     <!-- Messages -->

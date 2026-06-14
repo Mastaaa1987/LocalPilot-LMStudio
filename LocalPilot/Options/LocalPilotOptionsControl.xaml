@@ -432,11 +432,21 @@
                             </StackPanel>
                         </Grid>
 
-
-                        <StackPanel Orientation="Horizontal" Margin="0,0,0,10">
-                            <TextBlock Text="Max Chat History Messages: " Style="{DynamicResource LpLabelStyle}" VerticalAlignment="Center"/>
-                            <TextBox x:Name="TxtChatHistory" Style="{DynamicResource LpInputStyle}" Width="80"/>
-                        </StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="*"/>
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Grid.Column="0" Margin="0,0,8,0">
+                                <TextBlock Text="Max Chat History Messages" Style="{DynamicResource LpLabelStyle}"/>
+                                <TextBox x:Name="TxtChatHistory" Style="{DynamicResource LpInputStyle}" ToolTip="Max number of past messages to retain in conversation context."/>
+                            </StackPanel>
+                            <StackPanel Grid.Column="1" Margin="8,0,0,0">
+                                <TextBlock Text="Request Timeout (seconds)" Style="{DynamicResource LpLabelStyle}"/>
+                                <TextBox x:Name="TxtRequestTimeout" Style="{DynamicResource LpInputStyle}" ToolTip="Set connection timeout in seconds. 0 uses automatic dynamic calculation. Set high (e.g. 1800+) for slow CPU execution or deep reasoning."/>
+                                <TextBlock Text="Set to 0 for automatic dynamic timeout" Style="{DynamicResource LpMutedLabel}" FontSize="11" Margin="0,2,0,0"/>
+                            </StackPanel>
+                        </Grid>
 
                         <!-- Project Intelligence -->
                         <TextBlock Text="📂  Project Intelligence" Style="{DynamicResource LpSectionHeader}"/>

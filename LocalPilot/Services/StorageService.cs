@@ -60,6 +60,14 @@ namespace LocalPilot.Services
                     {
                         if (_connection == null)
                         {
+                            try
+                            {
+                                SQLitePCL.Batteries_V2.Init();
+                            }
+                            catch (Exception ex)
+                            {
+                                LocalPilotLogger.Log($"[Storage] SQLitePCL.Batteries_V2.Init failed: {ex.Message}", LogCategory.Storage, LogSeverity.Warning);
+                            }
                             _connection = new SqliteConnection($"Data Source={_dbPath}");
                         }
 

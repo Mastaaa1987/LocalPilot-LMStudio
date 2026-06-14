@@ -60,6 +60,39 @@ namespace LocalPilot.Services
 
         private readonly HistoryCompactor _historyCompactor;
 
+        private bool IsConversationalQuery(string query)
+        {
+            if (string.IsNullOrWhiteSpace(query)) return true;
+            if (query.StartsWith("/")) return false; // Slash commands are technical
+
+            string clean = query.Trim().ToLowerInvariant()
+                .Replace("!", "").Replace(".", "").Replace("?", "").Replace(",", "");
+
+            string[] commonConversational = { 
+                "hi", "hello", "hey", "thanks", "thank you", "thanks!", 
+                "awesome", "perfect", "good morning", "good afternoon",
+                "good evening", "bye", "goodbye", "ok", "okay", "cool", "greetings"
+            };
+
+            if (commonConversational.Contains(clean)) return true;
+
+            // Check if query is very short and doesn't contain code/symbols
+            var words = clean.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length <= 3)
+            {
+                bool hasTechnicalIndicator = clean.Contains("{") || clean.Contains("}") || 
+                                             clean.Contains("(") || clean.Contains(")") || 
+                                             clean.Contains("[") || clean.Contains("]") || 
+                                             clean.Contains("<") || clean.Contains(">") || 
+                                             clean.Contains(";") || clean.Contains("=") ||
+                                             clean.Contains("+") || clean.Contains("-") ||
+                                             clean.Contains("*") || clean.Contains("/");
+                if (!hasTechnicalIndicator) return true;
+            }
+
+            return false;
+        }
+
         /// <summary>
         /// Initiates an autonomous task for the agent.
         /// Uses Ollama's native tool calling API for structured, reliable tool invocation.
@@ -71,6 +104,8 @@ namespace LocalPilot.Services
                 OnStatusUpdate?.Invoke(AgentStatus.Failed, "Ollama is unreachable (Circuit Breaker tripped). Please check your connection.");
                 return;
             }
+
+            bool isConversational = IsConversationalQuery(taskDescription);
 
             IsActive = true;
             GlobalPriorityGuard.StartAgentTurn();
@@ -122,8 +157,7 @@ namespace LocalPilot.Services
                                          m.Content.Contains("{solutionPath}")));
 
                 // 🚀 SMART SYSTEM PROMPT: Tailor the foundation based on the task intent
-                var systemPrompt = PromptLoader.GetPrompt("SystemPrompt", new Dictionary<string, string> { { "solutionPath", solutionPath } });
-
+                string systemPrompt;
                 bool isReadOnlyAction = taskDescription.Contains("<task_type>code_explanation") || 
                                         taskDescription.Contains("<task_type>documentation_generation") ||
                                         taskDescription.Contains("<task_type>code_review") ||
@@ -131,17 +165,25 @@ namespace LocalPilot.Services
                                         taskDescription.Contains("/review") ||
                                         taskDescription.Contains("/doc");
 
-                if (isReadOnlyAction && !string.IsNullOrEmpty(systemPrompt))
+                if (isConversational)
                 {
-                    // Strip the 'Worker' protocol for informational tasks to save context and prevent hallucinated tool calls
-                    systemPrompt = System.Text.RegularExpressions.Regex.Replace(systemPrompt, @"(?s)<smart_fix_protocol>.*?</smart_fix_protocol>", string.Empty);
-                    systemPrompt = System.Text.RegularExpressions.Regex.Replace(systemPrompt, @"(?s)<tool_usage>.*?</tool_usage>", string.Empty);
+                    systemPrompt = "You are LocalPilot, an AI coding assistant. Give a short, direct, friendly, and conversational response.";
+                }
+                else
+                {
+                    systemPrompt = PromptLoader.GetPrompt("SystemPrompt", new Dictionary<string, string> { { "solutionPath", solutionPath } });
+                    if (isReadOnlyAction && !string.IsNullOrEmpty(systemPrompt))
+                    {
+                        // Strip the 'Worker' protocol for informational tasks to save context and prevent hallucinated tool calls
+                        systemPrompt = System.Text.RegularExpressions.Regex.Replace(systemPrompt, @"(?s)<smart_fix_protocol>.*?</smart_fix_protocol>", string.Empty);
+                        systemPrompt = System.Text.RegularExpressions.Regex.Replace(systemPrompt, @"(?s)<tool_usage>.*?</tool_usage>", string.Empty);
+                    }
                 }
 
                 messages.Insert(0, new ChatMessage { Role = "system", Content = systemPrompt ?? "You are LocalPilot." });
 
                 // Inject project-specific rules if they haven't been added yet
-                if (!messages.Any(m => m.Content.Contains("PROJECT-SPECIFIC RULES")))
+                if (!isConversational && !messages.Any(m => m.Content.Contains("PROJECT-SPECIFIC RULES")))
                 {
                     try
                     {
@@ -158,16 +200,16 @@ namespace LocalPilot.Services
                 // ═══════════════════════════════════════════════════════════════════
                 // NATIVE TOOL DEFINITIONS
                 // ═══════════════════════════════════════════════════════════════════
-                // 🚀 PERFORMANCE SHIELD: Disable tools for informational Quick Actions to ensure near-instant responses
+                // 🚀 PERFORMANCE SHIELD: Disable tools for informational Quick Actions and conversational inputs to ensure near-instant responses
                 // and prevent models from hallucinating tool calls for simple questions.
-                var toolDefinitions = isReadOnlyAction ? new List<OllamaToolDefinition>() : _toolRegistry.GetOllamaToolDefinitions();
+                var toolDefinitions = (isReadOnlyAction || isConversational) ? new List<OllamaToolDefinition>() : _toolRegistry.GetOllamaToolDefinitions();
                 LocalPilotLogger.Log($"[Agent] Registered {toolDefinitions.Count} native tools for Ollama (ReadOnly: {isReadOnlyAction})", LogCategory.Agent);
 
                 // Determine if this is a specialized Quick Action (Explain, Document, etc)
                 bool isQuickAction = !string.IsNullOrEmpty(modelOverride);
 
                 // 🚀 UNIFIED CONTEXT PIPELINE: Proactively gather implicit context (Errors, Git, Symbols)
-                if (!isQuickAction && !messages.Any(m => m.Content.Contains("ACTIVE DIAGNOSTICS")))
+                if (!isConversational && !isQuickAction && !messages.Any(m => m.Content.Contains("ACTIVE DIAGNOSTICS")))
                 {
                     string unifiedContext = await GetUnifiedContextAsync(solutionPath, ct);
                     if (!string.IsNullOrEmpty(unifiedContext))
@@ -196,8 +238,8 @@ namespace LocalPilot.Services
                 }
                 */
                 
-                // Fetch initial grounding context from the project (Skip for simple Quick Actions)
-                if (!isQuickAction)
+                // Fetch initial grounding context from the project (Skip for simple Quick Actions/Conversational)
+                if (!isQuickAction && !isConversational)
                 {
                     string groundingContext = contextOverride;
                     if (string.IsNullOrEmpty(groundingContext)) {
@@ -214,98 +256,104 @@ namespace LocalPilot.Services
                 string activeSelection = "";
                 string activeDocPath = null;
                 string activeDocContent = null;
-                try
+                if (!isConversational)
                 {
-                    await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
-                    var activeDoc = await VS.Documents.GetActiveDocumentViewAsync();
-                    if (activeDoc?.FilePath != null)
+                    try
                     {
-                        activeDocPath = activeDoc.FilePath;
-                        activeDocContent = activeDoc.TextBuffer?.CurrentSnapshot?.GetText();
-
-                        // Get selection if available
-                        if (activeDoc.TextView?.Selection != null && activeDoc.TextView.Selection.SelectedSpans.Count > 0)
+                        await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
+                        var activeDoc = await VS.Documents.GetActiveDocumentViewAsync();
+                        if (activeDoc?.FilePath != null)
                         {
-                            activeSelection = activeDoc.TextView.Selection.SelectedSpans[0].GetText();
-                        }
-                        if (string.IsNullOrWhiteSpace(activeSelection) && activeDocContent != null)
-                        {
-                            activeSelection = activeDocContent;
-                        }
+                            activeDocPath = activeDoc.FilePath;
+                            activeDocContent = activeDoc.TextBuffer?.CurrentSnapshot?.GetText();
 
-                        // Inject semantic neighborhood from Roslyn/LSP
-                        string neighborhood = await SymbolIndexService.Instance.GetNeighborhoodContextAsync(activeDocPath, ct);
-                        if (!string.IsNullOrEmpty(neighborhood))
-                        {
-                            messages.Add(new ChatMessage { Role = "system", Content = neighborhood });
-                        }
-
-                        // Inject active editor snippet (Surgical: 50 lines around cursor)
-                        string snippetContent = activeDocContent;
-                        if (snippetContent != null)
-                        {
-                            try {
-                                var selection = activeDoc.TextView?.Selection;
-                                int cursorLine = 0;
-                                if (selection != null && selection.ActivePoint != null) {
-                                    cursorLine = selection.ActivePoint.Position.GetContainingLine().LineNumber;
-                                }
-
-                                var lines = snippetContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-                                int start = Math.Max(0, cursorLine - 25);
-                                int end = Math.Min(lines.Length - 1, cursorLine + 25);
-                                
-                                var sbSnippet = new StringBuilder();
-                                if (start > 0) sbSnippet.AppendLine("// ... [Top of file truncated] ...");
-                                for (int i = start; i <= end; i++) {
-                                    sbSnippet.AppendLine(lines[i]);
-                                }
-                                if (end < lines.Length - 1) sbSnippet.AppendLine("// ... [Bottom of file truncated] ...");
-
-                                snippetContent = sbSnippet.ToString();
-                            } catch {
-                                // Fallback to start of file if cursor detection fails
-                                if (snippetContent.Length > 3000) snippetContent = snippetContent.Substring(0, 3000) + "... [truncated]";
+                            // Get selection if available
+                            if (activeDoc.TextView?.Selection != null && activeDoc.TextView.Selection.SelectedSpans.Count > 0)
+                            {
+                                activeSelection = activeDoc.TextView.Selection.SelectedSpans[0].GetText();
+                            }
+                            if (string.IsNullOrWhiteSpace(activeSelection) && activeDocContent != null)
+                            {
+                                activeSelection = activeDocContent;
                             }
 
-                            messages.Add(new ChatMessage { 
-                                Role = "system", 
-                                Content = $"## ACTIVE EDITOR SNIPPET (Near Cursor)\nPath: {activeDocPath}\nCode:\n```\n{snippetContent}\n```" 
-                            });
+                            // Inject semantic neighborhood from Roslyn/LSP
+                            string neighborhood = await SymbolIndexService.Instance.GetNeighborhoodContextAsync(activeDocPath, ct);
+                            if (!string.IsNullOrEmpty(neighborhood))
+                            {
+                                messages.Add(new ChatMessage { Role = "system", Content = neighborhood });
+                            }
+
+                            // Inject active editor snippet (Surgical: 50 lines around cursor)
+                            string snippetContent = activeDocContent;
+                            if (snippetContent != null)
+                            {
+                                try {
+                                    var selection = activeDoc.TextView?.Selection;
+                                    int cursorLine = 0;
+                                    if (selection != null && selection.ActivePoint != null) {
+                                        cursorLine = selection.ActivePoint.Position.GetContainingLine().LineNumber;
+                                    }
+
+                                    var lines = snippetContent.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+                                    int start = Math.Max(0, cursorLine - 25);
+                                    int end = Math.Min(lines.Length - 1, cursorLine + 25);
+                                    
+                                    var sbSnippet = new StringBuilder();
+                                    if (start > 0) sbSnippet.AppendLine("// ... [Top of file truncated] ...");
+                                    for (int i = start; i <= end; i++) {
+                                        sbSnippet.AppendLine(lines[i]);
+                                    }
+                                    if (end < lines.Length - 1) sbSnippet.AppendLine("// ... [Bottom of file truncated] ...");
+
+                                    snippetContent = sbSnippet.ToString();
+                                } catch {
+                                    // Fallback to start of file if cursor detection fails
+                                    if (snippetContent.Length > 3000) snippetContent = snippetContent.Substring(0, 3000) + "... [truncated]";
+                                }
+
+                                messages.Add(new ChatMessage { 
+                                    Role = "system", 
+                                    Content = $"## ACTIVE EDITOR SNIPPET (Near Cursor)\nPath: {activeDocPath}\nCode:\n```\n{snippetContent}\n```" 
+                                });
+                            }
                         }
                     }
+                    catch { }
                 }
-                catch { }
 
                 // Nexus intelligence: inject cross-language dependency awareness
-                try
+                if (!isConversational)
                 {
-                    var nexus = NexusService.Instance.GetGraph();
-                    if (nexus.Nodes.Any() && activeDocPath != null)
+                    try
                     {
-                        var node = nexus.Nodes.FirstOrDefault(n => n.FilePath != null && n.FilePath.Equals(activeDocPath, StringComparison.OrdinalIgnoreCase));
-                        if (node != null)
+                        var nexus = NexusService.Instance.GetGraph();
+                        if (nexus.Nodes.Any() && activeDocPath != null)
                         {
-                            var deps = nexus.Edges.Where(e => e.FromId == node.Id).ToList();
-                            if (deps.Any())
+                            var node = nexus.Nodes.FirstOrDefault(n => n.FilePath != null && n.FilePath.Equals(activeDocPath, StringComparison.OrdinalIgnoreCase));
+                            if (node != null)
                             {
-                                var sb = new System.Text.StringBuilder();
-                                sb.AppendLine("## NEXUS CONTEXT (Stack Dependencies)");
-                                sb.AppendLine($"Active File '{node.Name}' connects to {deps.Count} resources.");
-                                
-                                foreach (var edge in deps.Take(5))
+                                var deps = nexus.Edges.Where(e => e.FromId == node.Id).ToList();
+                                if (deps.Any())
                                 {
-                                    var target = nexus.Nodes.FirstOrDefault(n => n.Id == edge.ToId);
-                                    sb.AppendLine($" - {target?.Name ?? edge.ToId} ({target?.Type})");
+                                    var sb = new System.Text.StringBuilder();
+                                    sb.AppendLine("## NEXUS CONTEXT (Stack Dependencies)");
+                                    sb.AppendLine($"Active File '{node.Name}' connects to {deps.Count} resources.");
+                                    
+                                    foreach (var edge in deps.Take(5))
+                                    {
+                                        var target = nexus.Nodes.FirstOrDefault(n => n.Id == edge.ToId);
+                                        sb.AppendLine($" - {target?.Name ?? edge.ToId} ({target?.Type})");
+                                    }
+                                    if (deps.Count > 5) sb.AppendLine($" ... and {deps.Count - 5} other architectural links.");
+                                    
+                                    messages.Add(new ChatMessage { Role = "system", Content = sb.ToString() });
                                 }
-                                if (deps.Count > 5) sb.AppendLine($" ... and {deps.Count - 5} other architectural links.");
-                                
-                                messages.Add(new ChatMessage { Role = "system", Content = sb.ToString() });
                             }
                         }
                     }
+                    catch { }
                 }
-                catch { }
 
             // Handle Slash Commands
             string processedTask = taskDescription.Trim();
@@ -344,35 +392,38 @@ namespace LocalPilot.Services
 
             // 🔍 FILE NESTING: Use Roslyn/LSP to find definitions for potential symbols in the task
             // This provides the model with structural awareness of the code it's discussing.
-            var words = processedTask.Split(new[] { ' ', '.', '(', ')', '[', ']', '<', '>', ',', ';', ':', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
-            
-            // 🚀 PERFORMANCE SHIELD: Filter and limit the number of symbol lookups to prevent pre-turn hangs.
-            var PascalNames = words
-                .Where(w => w.Length >= 4 && char.IsUpper(w[0]) && !w.All(char.IsUpper)) 
-                .Distinct()
-                .Take(5); 
-
-            using (var discoveryCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+            if (!isConversational)
             {
-                discoveryCts.CancelAfter(5000); 
-                foreach (var name in PascalNames)
+                var words = processedTask.Split(new[] { ' ', '.', '(', ')', '[', ']', '<', '>', ',', ';', ':', '!', '?' }, StringSplitOptions.RemoveEmptyEntries);
+                
+                // 🚀 PERFORMANCE SHIELD: Filter and limit the number of symbol lookups to prevent pre-turn hangs.
+                var PascalNames = words
+                    .Where(w => w.Length >= 4 && char.IsUpper(w[0]) && !w.All(char.IsUpper)) 
+                    .Distinct()
+                    .Take(5); 
+
+                using (var discoveryCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
-                    if (discoveryCts.Token.IsCancellationRequested) break;
-                    
-                    var locs = await SymbolIndexService.Instance.FindDefinitionsAsync(name, discoveryCts.Token);
-                    if (locs != null && locs.Any())
+                    discoveryCts.CancelAfter(5000); 
+                    foreach (var name in PascalNames)
                     {
-                        var loc = locs.First();
-                        messages.Add(new ChatMessage { Role = "system", Content = $"[LSP CONTEXT] Symbol '{name}' ({loc.Kind}) is defined at: {loc.FilePath}:{loc.Line}" });
+                        if (discoveryCts.Token.IsCancellationRequested) break;
+                        
+                        var locs = await SymbolIndexService.Instance.FindDefinitionsAsync(name, discoveryCts.Token);
+                        if (locs != null && locs.Any())
+                        {
+                            var loc = locs.First();
+                            messages.Add(new ChatMessage { Role = "system", Content = $"[LSP CONTEXT] Symbol '{name}' ({loc.Kind}) is defined at: {loc.FilePath}:{loc.Line}" });
+                        }
                     }
                 }
-            }
 
-            // Inject known symbols summary for fuzzy matching
-            string symbolSummary = SymbolIndexService.Instance.GetSummary();
-            if (!string.IsNullOrEmpty(symbolSummary))
-            {
-                messages.Add(new ChatMessage { Role = "system", Content = $"## WORKSPACE SYMBOLS\n{symbolSummary}" });
+                // Inject known symbols summary for fuzzy matching
+                string symbolSummary = SymbolIndexService.Instance.GetSummary();
+                if (!string.IsNullOrEmpty(symbolSummary))
+                {
+                    messages.Add(new ChatMessage { Role = "system", Content = $"## WORKSPACE SYMBOLS\n{symbolSummary}" });
+                }
             }
 
             // Finally, the user request with a task header
@@ -1001,6 +1052,11 @@ namespace LocalPilot.Services
             }
 
             if (isQuickAction) options.RequestTimeoutSeconds = Math.Max(options.RequestTimeoutSeconds, 180);
+
+            if (LocalPilot.Settings.LocalPilotSettings.Instance.RequestTimeoutSeconds > 0)
+            {
+                options.RequestTimeoutSeconds = LocalPilot.Settings.LocalPilotSettings.Instance.RequestTimeoutSeconds;
+            }
 
             LocalPilotLogger.Log($"[Orchestrator] Dynamic Timeout: {options.RequestTimeoutSeconds}s (Base: {dynamicTimeout}s, EstimatedTokens: {estimatedTokens})");
 
