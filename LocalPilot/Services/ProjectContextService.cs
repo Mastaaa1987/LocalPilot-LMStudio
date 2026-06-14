@@ -65,6 +65,10 @@ namespace LocalPilot.Services
                 if (_solutionRoot != currentRoot)
                 {
                     LocalPilotLogger.Log($"Solution changed. Active root: {currentRoot}", LogCategory.Agent);
+                    
+                    // Dispose old watcher if switching solutions
+                    DisposeWatcher();
+
                     _solutionRoot = currentRoot;
                     
                     // Legacy migration check
@@ -559,6 +563,26 @@ namespace LocalPilot.Services
             if (!string.IsNullOrEmpty(_solutionRoot) && fullPath.StartsWith(_solutionRoot, StringComparison.OrdinalIgnoreCase))
                 return fullPath.Substring(_solutionRoot.Length).TrimStart(Path.DirectorySeparatorChar);
             return fullPath.TrimStart(Path.DirectorySeparatorChar);
+        }
+
+        private void DisposeWatcher()
+        {
+            try
+            {
+                if (_watcher != null)
+                {
+                    _watcher.EnableRaisingEvents = false;
+                    _watcher.Dispose();
+                    _watcher = null;
+                }
+                if (_watcherCts != null)
+                {
+                    _watcherCts.Cancel();
+                    _watcherCts.Dispose();
+                    _watcherCts = null;
+                }
+            }
+            catch { }
         }
 
         private void SetupIncrementalWatcher(OllamaService ollama)

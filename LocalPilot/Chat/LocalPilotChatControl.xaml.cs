@@ -299,6 +299,10 @@ namespace LocalPilot.Chat
             _scanCts?.Cancel();
             _scanCts?.Dispose();
             _scanCts = null;
+
+            _cts?.Cancel();
+            _cts?.Dispose();
+            _cts = null;
         }
 
         private ScrollViewer _scrollViewer;
