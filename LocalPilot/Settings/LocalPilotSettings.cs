@@ -79,6 +79,7 @@ namespace LocalPilot.Settings
         public string AccentColor        { get; set; } = "#7C6AF7";    // purple
         public bool   ShowStatusBar      { get; set; } = true;
         public bool   EnableLogging      { get; set; } = false;
+        public double ZoomFactor          { get; set; } = 1.0;
 
         // ── Singleton ─────────────────────────────────────────────────────────
         private static LocalPilotSettings _instance;
