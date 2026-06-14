@@ -155,7 +155,20 @@ namespace LocalPilot.Services
                         {
                             if (await reader.IsDBNullAsync(0).ConfigureAwait(false)) continue;
                             string path = reader.GetString(0);
-                            DateTime lastMod = await reader.IsDBNullAsync(1).ConfigureAwait(false) ? DateTime.MinValue : reader.GetDateTime(1);
+                            
+                            DateTime lastMod = DateTime.MinValue;
+                            if (!await reader.IsDBNullAsync(1).ConfigureAwait(false))
+                            {
+                                string dateStr = reader.GetString(1);
+                                if (!string.IsNullOrEmpty(dateStr))
+                                {
+                                    if (!DateTime.TryParse(dateStr, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out lastMod))
+                                    {
+                                        DateTime.TryParse(dateStr, out lastMod);
+                                    }
+                                }
+                            }
+                            
                             string hash = await reader.IsDBNullAsync(2).ConfigureAwait(false) ? "" : reader.GetString(2);
                             dict[path.ToLowerInvariant()] = (lastMod, hash);
                         }
@@ -280,7 +293,7 @@ namespace LocalPilot.Services
                                 // 2. File Entry
                                 pFileP.Value = item.path;
                                 pFileC.Value = item.content;
-                                pFileL.Value = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss");
+                                pFileL.Value = fileInfo.LastWriteTime.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
                                 pFileH.Value = hash;
                                 await insFileCmd.ExecuteNonQueryAsync(ct);
 
