@@ -94,6 +94,7 @@ namespace LocalPilot.Options
             TxtChatHistory.Text       = s.ChatHistoryMaxItems.ToString();
             TxtNumCtx.Text            = s.ContextWindowSize.ToString();
             TxtNumPredict.Text        = s.MaxOutputTokens.ToString();
+            TxtRequestTimeout.Text    = s.RequestTimeoutSeconds.ToString();
 
             // Populate model combos with current value; 
             // full list populated after async fetch
@@ -159,6 +160,7 @@ namespace LocalPilot.Options
                     if (TxtChatHistory != null && int.TryParse(TxtChatHistory.Text, out int ch)) s.ChatHistoryMaxItems = ch;
                     if (TxtNumCtx != null && int.TryParse(TxtNumCtx.Text, out int nc) && nc >= 512) s.ContextWindowSize = nc;
                     if (TxtNumPredict != null && int.TryParse(TxtNumPredict.Text, out int np) && np >= 128) s.MaxOutputTokens = np;
+                    if (TxtRequestTimeout != null && int.TryParse(TxtRequestTimeout.Text, out int rt) && rt >= 0) s.RequestTimeoutSeconds = rt;
                 }
 
                 // Persist to disk

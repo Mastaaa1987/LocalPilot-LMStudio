@@ -17,8 +17,8 @@ namespace LocalPilot.Services
     /// </summary>
     public class OllamaService
     {
-        private static readonly HttpClient _httpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(10) };
-        private static readonly HttpClient _backgroundHttpClient = new HttpClient { Timeout = TimeSpan.FromMinutes(35) };
+        private static readonly HttpClient _httpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
+        private static readonly HttpClient _backgroundHttpClient = new HttpClient { Timeout = Timeout.InfiniteTimeSpan };
         private string _baseUrl;
 
         private volatile bool _circuitBreakerTripped = false;
@@ -51,8 +51,12 @@ namespace LocalPilot.Services
             {
                 var payload = new { model, prompt = "Hi", stream = false, keep_alive = "10m" };
                 var content = new StringContent(JsonConvert.SerializeObject(payload), Encoding.UTF8, "application/json");
-                await _httpClient.PostAsync($"{_baseUrl}/api/generate", content, ct).ConfigureAwait(false);
-                LocalPilotLogger.Log($"Warmup complete for model: {model}", LogCategory.Ollama);
+                using (var localCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    localCts.CancelAfter(TimeSpan.FromMinutes(3));
+                    await _httpClient.PostAsync($"{_baseUrl}/api/generate", content, localCts.Token).ConfigureAwait(false);
+                    LocalPilotLogger.Log($"Warmup complete for model: {model}", LogCategory.Ollama);
+                }
             }
             catch { /* Best effort only */ }
         }
@@ -64,18 +68,22 @@ namespace LocalPilot.Services
             try
             {
                 var sw = System.Diagnostics.Stopwatch.StartNew();
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", ct).ConfigureAwait(false);
-                sw.Stop();
-                LocalPilotLogger.Log($"[Ollama] Fetching models took {sw.ElapsedMilliseconds}ms. Success: {response.IsSuccessStatusCode}", LogCategory.Ollama);
-                if (!response.IsSuccessStatusCode) return names;
+                using (var localCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    localCts.CancelAfter(TimeSpan.FromSeconds(10));
+                    var response = await _httpClient.GetAsync($"{_baseUrl}/api/tags", localCts.Token).ConfigureAwait(false);
+                    sw.Stop();
+                    LocalPilotLogger.Log($"[Ollama] Fetching models took {sw.ElapsedMilliseconds}ms. Success: {response.IsSuccessStatusCode}", LogCategory.Ollama);
+                    if (!response.IsSuccessStatusCode) return names;
 
-                var json = await response.Content.ReadAsStringAsync();
-                var obj  = JObject.Parse(json);
-                var arr  = obj["models"] as JArray;
-                if (arr == null) return names;
+                    var json = await response.Content.ReadAsStringAsync();
+                    var obj  = JObject.Parse(json);
+                    var arr  = obj["models"] as JArray;
+                    if (arr == null) return names;
 
-                foreach (var m in arr)
-                    names.Add(m["name"]?.ToString() ?? string.Empty);
+                    foreach (var m in arr)
+                        names.Add(m["name"]?.ToString() ?? string.Empty);
+                }
             }
             catch { /* Ollama not running — return empty list */ }
             return names;
@@ -86,13 +94,17 @@ namespace LocalPilot.Services
         {
             try
             {
-                var resp = await _httpClient.GetAsync($"{_baseUrl}/api/tags", ct).ConfigureAwait(false);
-                if (resp.IsSuccessStatusCode)
+                using (var localCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
                 {
-                    CircuitBreakerTripped = false;
-                    _consecutiveFailures = 0;
+                    localCts.CancelAfter(TimeSpan.FromSeconds(5));
+                    var resp = await _httpClient.GetAsync($"{_baseUrl}/api/tags", localCts.Token).ConfigureAwait(false);
+                    if (resp.IsSuccessStatusCode)
+                    {
+                        CircuitBreakerTripped = false;
+                        _consecutiveFailures = 0;
+                    }
+                    return resp.IsSuccessStatusCode;
                 }
-                return resp.IsSuccessStatusCode;
             }
             catch { return false; }
         }
@@ -543,27 +555,31 @@ namespace LocalPilot.Services
         {
             try
             {
-                var response = await _httpClient.GetAsync($"{_baseUrl}/api/ps", ct).ConfigureAwait(false);
-                if (!response.IsSuccessStatusCode) return new VramStatus { IsHealthy = true };
+                using (var localCts = CancellationTokenSource.CreateLinkedTokenSource(ct))
+                {
+                    localCts.CancelAfter(TimeSpan.FromSeconds(5));
+                    var response = await _httpClient.GetAsync($"{_baseUrl}/api/ps", localCts.Token).ConfigureAwait(false);
+                    if (!response.IsSuccessStatusCode) return new VramStatus { IsHealthy = true };
 
-                var json = await response.Content.ReadAsStringAsync();
-                var obj = JObject.Parse(json);
-                var models = obj["models"] as JArray;
-                
-                if (models == null || models.Count == 0) return new VramStatus { IsHealthy = true, TotalVramUsedMb = 0 };
+                    var json = await response.Content.ReadAsStringAsync();
+                    var obj = JObject.Parse(json);
+                    var models = obj["models"] as JArray;
+                    
+                    if (models == null || models.Count == 0) return new VramStatus { IsHealthy = true, TotalVramUsedMb = 0 };
 
-                long totalUsed = 0;
-                foreach (var m in models) {
-                    totalUsed += (long)(m["size_vram"] ?? 0);
+                    long totalUsed = 0;
+                    foreach (var m in models) {
+                        totalUsed += (long)(m["size_vram"] ?? 0);
+                    }
+
+                    double usedGb = totalUsed / (1024.0 * 1024 * 1024);
+                    return new VramStatus 
+                    { 
+                        IsHealthy = usedGb < 12.0, // Assuming a standard 12GB-16GB card threshold
+                        TotalVramUsedMb = (int)(totalUsed / (1024 * 1024)),
+                        ActiveModelsCount = models.Count
+                    };
                 }
-
-                double usedGb = totalUsed / (1024.0 * 1024 * 1024);
-                return new VramStatus 
-                { 
-                    IsHealthy = usedGb < 12.0, // Assuming a standard 12GB-16GB card threshold
-                    TotalVramUsedMb = (int)(totalUsed / (1024 * 1024)),
-                    ActiveModelsCount = models.Count
-                };
             }
             catch { return new VramStatus { IsHealthy = true }; }
         }

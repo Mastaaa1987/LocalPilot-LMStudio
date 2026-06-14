@@ -1053,6 +1053,11 @@ namespace LocalPilot.Services
 
             if (isQuickAction) options.RequestTimeoutSeconds = Math.Max(options.RequestTimeoutSeconds, 180);
 
+            if (LocalPilot.Settings.LocalPilotSettings.Instance.RequestTimeoutSeconds > 0)
+            {
+                options.RequestTimeoutSeconds = LocalPilot.Settings.LocalPilotSettings.Instance.RequestTimeoutSeconds;
+            }
+
             LocalPilotLogger.Log($"[Orchestrator] Dynamic Timeout: {options.RequestTimeoutSeconds}s (Base: {dynamicTimeout}s, EstimatedTokens: {estimatedTokens})");
 
             return options;
