@@ -19,6 +19,8 @@
     <IncludeAssemblyInVSIXContainer>true</IncludeAssemblyInVSIXContainer>
     <CopyBuildOutputToOutputDirectory>true</CopyBuildOutputToOutputDirectory>
     <CopyOutputSymbolsToOutputDirectory>true</CopyOutputSymbolsToOutputDirectory>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <IncludeCopyLocalFilesOutputGroupDuringBuild>true</IncludeCopyLocalFilesOutputGroupDuringBuild>
   </PropertyGroup>
 
   <ItemGroup>
@@ -73,5 +75,20 @@
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.8.0" />
     <PackageReference Include="Microsoft.CodeAnalysis.CSharp.Workspaces" Version="4.8.0" />
     <PackageReference Include="Microsoft.VisualStudio.LanguageServices" Version="4.8.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Content Include="$(OutputPath)SQLitePCLRaw.core.dll">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <Link>SQLitePCLRaw.core.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
+    <Content Include="$(OutputPath)SQLitePCLRaw.batteries_v2.dll">
+      <IncludeInVSIX>true</IncludeInVSIX>
+      <Link>SQLitePCLRaw.batteries_v2.dll</Link>
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Visible>false</Visible>
+    </Content>
   </ItemGroup>
 </Project>
