@@ -298,7 +298,7 @@
                         BorderThickness="1" CornerRadius="20" Padding="12,6">
                     <StackPanel Orientation="Horizontal" Background="Transparent" VerticalAlignment="Center" Margin="0,4,0,0">
                         <Ellipse x:Name="StatusDot" Width="8" Height="8" Fill="#4EC9B0" VerticalAlignment="Center"/>
-                        <TextBlock x:Name="StatusText" Text="Ollama Connected" Foreground="{DynamicResource LpWindowFgBrush}" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
+                        <TextBlock x:Name="StatusText" Text="LM Studio Connected" Foreground="{DynamicResource LpWindowFgBrush}" FontSize="12" Margin="6,0,0,0" VerticalAlignment="Center"/>
                     </StackPanel>
                 </Border>
             </Grid>
@@ -316,8 +316,8 @@
                         <Grid>
                             <Grid.ColumnDefinitions><ColumnDefinition Width="*"/><ColumnDefinition Width="150"/></Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,8,0">
-                                <TextBlock Text="Ollama Base URL" Style="{DynamicResource LpLabelStyle}"/>
-                                <TextBox x:Name="TxtBaseUrl" Style="{DynamicResource LpInputStyle}" ToolTip="Default: http://localhost:11434"/>
+                                <TextBlock Text="LM Studio Base URL" Style="{DynamicResource LpLabelStyle}"/>
+                                <TextBox x:Name="TxtBaseUrl" Style="{DynamicResource LpInputStyle}" ToolTip="Default: http://localhost:1234/v1"/>
                             </StackPanel>
                             <StackPanel Grid.Column="1" VerticalAlignment="Bottom">
                                 <Button Content="Test Connection" Style="{DynamicResource LpSecondaryBtn}" x:Name="BtnTestConnection" Click="BtnTestConnection_Click" Height="32"/>

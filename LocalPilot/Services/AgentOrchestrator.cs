@@ -15,11 +15,11 @@ namespace LocalPilot.Services
 {
     /// <summary>
     /// The heart of Agent Mode. Orchestrates the Plan-Act-Observe loop
-    /// using Ollama's NATIVE tool calling API.
+    /// using LM Studio's OpenAI-compatible tool calling API.
     /// 
     /// KEY ARCHITECTURE CHANGE (v3.0):
     /// Instead of parsing ```json blocks from free-text model output, this orchestrator
-    /// sends tool definitions via Ollama's /api/chat 'tools' parameter and receives
+    /// sends tool definitions via `/v1/chat/completions` and receives
     /// structured tool_calls in the API response. This eliminates:
     ///   - Text-based JSON parsing (ParseAllToolCalls, SafeParseJson)
     ///   - Nudge messages ("You MUST call tools...")
@@ -27,7 +27,7 @@ namespace LocalPilot.Services
     /// </summary>
     public class AgentOrchestrator
     {
-        private readonly OllamaService _ollama;
+        private readonly LMStudioService _lmStudio;
         private readonly ToolRegistry _toolRegistry;
         private readonly ProjectContextService _projectContext;
         private readonly ProjectMapService _projectMap;
@@ -49,13 +49,13 @@ namespace LocalPilot.Services
         /// </summary>
         public bool IsActive { get; private set; }
 
-        public AgentOrchestrator(OllamaService ollama, ToolRegistry toolRegistry, ProjectContextService projectContext, ProjectMapService projectMap)
+        public AgentOrchestrator(LMStudioService lmStudio, ToolRegistry toolRegistry, ProjectContextService projectContext, ProjectMapService projectMap)
         {
-            _ollama = ollama;
+            _lmStudio = lmStudio;
             _toolRegistry = toolRegistry;
             _projectContext = projectContext;
             _projectMap = projectMap;
-            _historyCompactor = new HistoryCompactor(ollama);
+            _historyCompactor = new HistoryCompactor(lmStudio);
         }
 
         private readonly HistoryCompactor _historyCompactor;
@@ -95,13 +95,13 @@ namespace LocalPilot.Services
 
         /// <summary>
         /// Initiates an autonomous task for the agent.
-        /// Uses Ollama's native tool calling API for structured, reliable tool invocation.
+        /// Uses OpenAI-compatible tool calling for structured, reliable tool invocation.
         /// </summary>
         public async Task RunTaskAsync(string taskDescription, List<ChatMessage> messages, CancellationToken ct, string modelOverride = null, string contextOverride = null)
         {
-            if (_ollama.CircuitBreakerTripped)
+            if (_lmStudio.CircuitBreakerTripped)
             {
-                OnStatusUpdate?.Invoke(AgentStatus.Failed, "Ollama is unreachable (Circuit Breaker tripped). Please check your connection.");
+                OnStatusUpdate?.Invoke(AgentStatus.Failed, "LM Studio is unreachable (circuit breaker tripped). Start the Local Server and check the configured URL.");
                 return;
             }
 
@@ -112,10 +112,10 @@ namespace LocalPilot.Services
             try
             {
                 // 🛡️ GPU VRAM WATCHDOG: Check for resource pressure before starting
-                var vram = await _ollama.GetVramStatusAsync(ct);
+                var vram = await _lmStudio.GetVramStatusAsync(ct);
                 if (!vram.IsHealthy)
                 {
-                    LocalPilotLogger.Log($"[Agent] High GPU VRAM usage detected ({vram.TotalVramUsedMb}MB). Model loading may be slow.", LogCategory.Ollama, LogSeverity.Warning);
+                    LocalPilotLogger.Log($"[Agent] High GPU VRAM usage detected ({vram.TotalVramUsedMb}MB). Model loading may be slow.", LogCategory.LMStudio, LogSeverity.Warning);
                     OnStatusUpdate?.Invoke(AgentStatus.Thinking, "GPU VRAM pressure detected. Models may load slowly...");
                 }
 
@@ -202,8 +202,8 @@ namespace LocalPilot.Services
                 // ═══════════════════════════════════════════════════════════════════
                 // 🚀 PERFORMANCE SHIELD: Disable tools for informational Quick Actions and conversational inputs to ensure near-instant responses
                 // and prevent models from hallucinating tool calls for simple questions.
-                var toolDefinitions = (isReadOnlyAction || isConversational) ? new List<OllamaToolDefinition>() : _toolRegistry.GetOllamaToolDefinitions();
-                LocalPilotLogger.Log($"[Agent] Registered {toolDefinitions.Count} native tools for Ollama (ReadOnly: {isReadOnlyAction})", LogCategory.Agent);
+                var toolDefinitions = (isReadOnlyAction || isConversational) ? new List<LMStudioToolDefinition>() : _toolRegistry.GetLMStudioToolDefinitions();
+                LocalPilotLogger.Log($"[Agent] Registered {toolDefinitions.Count} OpenAI-compatible tools for LM Studio (ReadOnly: {isReadOnlyAction})", LogCategory.Agent);
 
                 // Determine if this is a specialized Quick Action (Explain, Document, etc)
                 bool isQuickAction = !string.IsNullOrEmpty(modelOverride);
@@ -243,7 +243,7 @@ namespace LocalPilot.Services
                 {
                     string groundingContext = contextOverride;
                     if (string.IsNullOrEmpty(groundingContext)) {
-                        groundingContext = await _projectContext.SearchContextAsync(_ollama, taskDescription, topN: 5);
+                        groundingContext = await _projectContext.SearchContextAsync(_lmStudio, taskDescription, topN: 5);
                     }
                     
                     if (!string.IsNullOrEmpty(groundingContext))
@@ -459,7 +459,7 @@ namespace LocalPilot.Services
                 {
                     // 🚀 KV-CACHE HYGIENE: Only remove the previous OODA orientation.
                     // We keep the LSP context and other system messages in their original positions 
-                    // to maintain the stable prefix for Ollama's prompt caching.
+                    // to maintain a stable prefix for the backend's prompt cache.
                     messages.RemoveAll(m => m.Role == "system" && m.Content.StartsWith("## OODA ORIENTATION"));
                     
                     string historySummary = GenerateActionHistorySummary(messages);
@@ -472,11 +472,11 @@ namespace LocalPilot.Services
                 int estimatedTokens = 0;
 
                 // 🚀 SMART CONTEXT TRUNCATION: Prevent 'Prefill Bloat' for 90k+ token projects.
-                // We prune the context IN Visual Studio so Ollama doesn't have to discard it slowly.
+                // Prune context in Visual Studio before sending it to LM Studio.
                 var prunedMessages = PruneContextToLimit(messages, options.NumCtx);
 
                 // Stream with native tool calling
-                await foreach (var result in _ollama.StreamChatWithToolsAsync(contextModel, prunedMessages, toolDefinitions, options, ct))
+                await foreach (var result in _lmStudio.StreamChatWithToolsAsync(contextModel, prunedMessages, toolDefinitions, options, ct))
                 {
                     if (result.IsTextToken)
                     {
@@ -489,7 +489,7 @@ namespace LocalPilot.Services
                     }
                     else if (result.IsToolCall)
                     {
-                        // Structured tool call from Ollama — no parsing needed!
+                        // Structured tool call from LM Studio — no text parsing needed.
                         toolCallsThisTurn.Add(new ToolCallRequest
                         {
                             Name = result.ToolName,
@@ -989,9 +989,9 @@ namespace LocalPilot.Services
             return null;
         }
 
-        private OllamaOptions ApplyPerformancePresets(LocalPilot.Settings.PerformanceMode mode, List<ChatMessage> history, bool isQuickAction)
+        private LMStudioOptions ApplyPerformancePresets(LocalPilot.Settings.PerformanceMode mode, List<ChatMessage> history, bool isQuickAction)
         {
-            var options = new OllamaOptions();
+            var options = new LMStudioOptions();
             
             // 🚀 DYNAMIC CONTEXT SIZER: Automatically calculate required memory
             // Use char/2 (not char/3): source code is denser than prose — keywords,
@@ -999,7 +999,7 @@ namespace LocalPilot.Services
             long estimatedTokens = 0;
             foreach (var msg in history) estimatedTokens += (msg.Content?.Length ?? 0) / 2;
             
-            // Account for the tools-schema JSON that Ollama injects into the prompt
+            // Account for the tool-schema JSON included in the LM Studio request.
             // but is NOT part of the messages array. 12 tools × ~400 chars ≈ ~2400 chars ≈ 1200 tokens.
             const long ToolSchemaOverhead = 1500;
             estimatedTokens += ToolSchemaOverhead;
@@ -1012,7 +1012,7 @@ namespace LocalPilot.Services
             else if (requiredCtx < 16384) requiredCtx = 16384;
             else if (requiredCtx < 32768) requiredCtx = 32768;
             
-            // 🚀 STRICT CAP: Ensure context never exceeds hardware/Ollama stability limits.
+            // Strict cap: keep context within local hardware and server limits.
             int maxCtx = isQuickAction ? 8192 : 32768;
             options.NumCtx = (int)Math.Min(requiredCtx, (long)maxCtx);
 

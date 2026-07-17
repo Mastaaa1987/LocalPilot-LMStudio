@@ -13,7 +13,7 @@ namespace LocalPilot.Services
         General,
         Context,
         Agent,
-        Ollama,
+        LMStudio,
         UI,
         Build,
         LSP,

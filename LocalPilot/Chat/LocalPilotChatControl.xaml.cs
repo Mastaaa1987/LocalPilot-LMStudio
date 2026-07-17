@@ -23,7 +23,7 @@ namespace LocalPilot.Chat
 {
     public partial class LocalPilotChatControl : UserControl
     {
-        private readonly OllamaService _ollama;
+        private readonly LMStudioService _lmStudio;
         private readonly List<ChatMessage> _history = new List<ChatMessage>();
         private CancellationTokenSource _cts;
         private string _lastAuthoringCode = null; // Buffer for original code during Refactor/Fix
@@ -95,11 +95,11 @@ namespace LocalPilot.Chat
             _agentTurnLayoutBuilder = new AgentTurnLayoutBuilder();
             _projectContext = ProjectContextService.Instance;
             DataContext = _sessionViewModel;
-            _ollama = new OllamaService(LocalPilotSettings.Instance.OllamaBaseUrl);
+            _lmStudio = new LMStudioService(LocalPilotSettings.Instance.LMStudioBaseUrl);
             
             // Initialize Agent Services
             _toolRegistry = new ToolRegistry();
-            _agentOrchestrator = new AgentOrchestrator(_ollama, _toolRegistry, ProjectContextService.Instance, ProjectMapService.Instance);
+            _agentOrchestrator = new AgentOrchestrator(_lmStudio, _toolRegistry, ProjectContextService.Instance, ProjectMapService.Instance);
             
             // 🚀 SMART FIX INITIALIZATION: Connect the error-watchdog to the brain
             SmartFixService.Instance.Initialize(_agentOrchestrator);
@@ -159,7 +159,7 @@ namespace LocalPilot.Chat
                     await Task.Delay(500, ct); 
                     if (ct.IsCancellationRequested) return;
 
-                    string context = await _projectContext.SearchContextAsync(_ollama, text, topN: 3, ct: ct);
+                    string context = await _projectContext.SearchContextAsync(_lmStudio, text, topN: 3, ct: ct);
                     if (!string.IsNullOrEmpty(context)) {
                         _lastShadowResults = context;
                     }
@@ -661,7 +661,7 @@ namespace LocalPilot.Chat
                 AppendUserBubble(task);
             }
 
-            // 🛡️ VALIDATION: Ensure model is selected and Ollama is reachable
+            // Ensure a model is selected and LM Studio is reachable.
             var settings = LocalPilotSettings.Instance;
             string modelToUse = modelOverride ?? settings.ChatModel;
 
@@ -675,10 +675,10 @@ namespace LocalPilot.Chat
             // Quick connectivity check if this is the first message
             if (_history.Count <= 1)
             {
-                bool isOllamaRunning = await _ollama.IsAvailableAsync();
-                if (!isOllamaRunning)
+                bool isLMStudioRunning = await _lmStudio.IsAvailableAsync();
+                if (!isLMStudioRunning)
                 {
-                    AppendAIBubble($"❌ **Cannot reach Ollama.**\n\nEnsure Ollama is running at `{settings.OllamaBaseUrl}`. You can download it from [ollama.com](https://ollama.com).");
+                    AppendAIBubble($"❌ **Cannot reach LM Studio.**\n\nStart the Local Server in LM Studio and verify that it is available at `{settings.LMStudioBaseUrl}`.");
                     return;
                 }
             }

@@ -19,7 +19,7 @@ namespace LocalPilot.Settings
         public PerformanceMode Mode { get; set; } = PerformanceMode.Standard;
 
         // ── Connection ─────────────────────────────────────────────────────────
-        public string OllamaBaseUrl    { get; set; } = "http://localhost:11434";
+        public string LMStudioBaseUrl  { get; set; } = "http://localhost:1234/v1";
 
         // ── Models ─────────────────────────────────────────────────────────────
         public string CompletionModel  { get; set; } = "";
@@ -32,7 +32,7 @@ namespace LocalPilot.Settings
 
         /// <summary>
         /// Returns true if the configured ChatModel looks like a dedicated embedding model.
-        /// Embedding models don't support /api/chat and will return HTTP 400 if used for it.
+        /// Embedding models cannot be used with `/v1/chat/completions`.
         /// </summary>
         public bool ChatModelIsEmbeddingModel =>
             !string.IsNullOrEmpty(ChatModel) &&
@@ -55,11 +55,11 @@ namespace LocalPilot.Settings
         public int    MaxChatTokens       { get; set; } = 4096;
 
         // ── Inference Limits ──────────────────────────────────────────────────
-        /// <summary>Ollama num_ctx: KV-cache size in tokens. Lower = less RAM + faster prefill. 4096 is optimal for CPU-only.</summary>
+        /// <summary>Context-window budget used when building requests for LM Studio.</summary>
         public int    ContextWindowSize   { get; set; } = 4096;
-        /// <summary>Ollama num_predict: Max tokens the model will generate per turn. 1024 is plenty for chat + completions.</summary>
+        /// <summary>Maximum number of tokens LM Studio may generate per request.</summary>
         public int    MaxOutputTokens     { get; set; } = 1024;
-        /// <summary>Ollama request timeout in seconds. 0 uses automatic dynamic calculation.</summary>
+        /// <summary>LM Studio request timeout in seconds. 0 uses automatic dynamic calculation.</summary>
         public int    RequestTimeoutSeconds { get; set; } = 0;
 
         // ── Agent ─────────────────────────────────────────────────────────────

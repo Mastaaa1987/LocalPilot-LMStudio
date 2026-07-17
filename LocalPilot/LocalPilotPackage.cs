@@ -13,7 +13,7 @@ using Task = System.Threading.Tasks.Task;
 namespace LocalPilot
 {
     /// <summary>
-    /// LocalPilot — GitHub Copilot-style AI extension powered by Ollama.
+    /// LocalPilot — GitHub Copilot-style AI extension powered by LM Studio.
     /// </summary>
     [PackageRegistration(UseManagedResourcesOnly = true, AllowsBackgroundLoading = true)]
     [Guid(PackageGuidString)]
@@ -52,7 +52,7 @@ namespace LocalPilot
 
             // 🚀 FIRST-RUN AUTO-DISCOVERY (v1.8)
             // If this is the first time the user installs LocalPilot, 
-            // try to find what models they actually have in Ollama 
+            // Discover models exposed by LM Studio's local server.
             // instead of failing with 404 for 'llama3'.
             if (isFirstRun || string.IsNullOrEmpty(settings.ChatModel))
             {
@@ -68,7 +68,7 @@ namespace LocalPilot
                             0,
                             ref clsid,
                             "LocalPilot Configuration Required",
-                            "Welcome to LocalPilot! Since no models are configured, please ensure Ollama is running, then go to Tools -> Options -> LocalPilot to set your AI models.",
+                            "Welcome to LocalPilot! Start the Local Server in LM Studio, then go to Tools -> Options -> LocalPilot to select your AI models.",
                             string.Empty,
                             0,
                             Microsoft.VisualStudio.Shell.Interop.OLEMSGBUTTON.OLEMSGBUTTON_OK,
@@ -83,8 +83,8 @@ namespace LocalPilot
                 {
                     try
                     {
-                        var ollama = new OllamaService(settings.OllamaBaseUrl);
-                        var available = await ollama.GetAvailableModelsAsync();
+                        var lmStudio = new LMStudioService(settings.LMStudioBaseUrl);
+                        var available = await lmStudio.GetAvailableModelsAsync();
                         if (available.Count > 0)
                         {
                             // Pick first non-embedding model for chat
@@ -106,10 +106,10 @@ namespace LocalPilot
                             settings.EmbeddingModel = embedModel;
 
                             SettingsPersistence.Save(settings);
-                            LocalPilotLogger.Log($"First-run detected available models. Set default to: {chatModel}", LogCategory.Ollama);
+                            LocalPilotLogger.Log($"First-run detected available models. Set default to: {chatModel}", LogCategory.LMStudio);
                         }
                     }
-                    catch { /* Quietly skip if Ollama is not running during first-run */ }
+                    catch { /* Quietly skip if LM Studio is not running during first-run. */ }
                 });
             }
 
@@ -128,13 +128,13 @@ namespace LocalPilot
                     // v1.8 Enterprise Intelligence: Wait for VS Solution to fully stabilize
                     await Task.Delay(10000, cancellationToken).ConfigureAwait(false); 
                     
-                    var ollama = new OllamaService(settings.OllamaBaseUrl);
+                    var lmStudio = new LMStudioService(settings.LMStudioBaseUrl);
                     
                     // 🚀 World-Class: Background Warmup (Pre-load the model)
-                    _ = ollama.WarmupAsync(settings.ChatModel, cancellationToken);
+                    _ = lmStudio.WarmupAsync(settings.ChatModel, cancellationToken);
                     
                     LocalPilotLogger.Log("Indexing project context in background...", LogCategory.Context);
-                    await ProjectContextService.Instance.IndexSolutionAsync(ollama, cancellationToken);
+                    await ProjectContextService.Instance.IndexSolutionAsync(lmStudio, cancellationToken);
 
                     // v1.8 Nexus Intelligence: Build the Full-Stack Dependency Graph
                     string root = "";

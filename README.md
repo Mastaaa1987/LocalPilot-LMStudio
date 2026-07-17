@@ -3,7 +3,7 @@
   <h1>LocalPilot</h1>
   <p align="center">
     <strong>The Privacy-First AI Pair Programmer for Visual Studio.</strong><br />
-    Bringing the power of local LLMs directly into your IDE with Ollama.
+    Bringing the power of local LLMs directly into your IDE with LM Studio.
   </p>
 
   <p align="center">
@@ -13,8 +13,8 @@
     <a href="https://github.com/FutureStackSolution/LocalPilot/blob/main/LICENSE">
       <img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="License: MIT" />
     </a>
-    <a href="https://ollama.com">
-      <img src="https://img.shields.io/badge/Ollama-Compatible-orange.svg" alt="Ollama Support" />
+    <a href="https://lmstudio.ai/">
+      <img src="https://img.shields.io/badge/LM%20Studio-Compatible-orange.svg" alt="LM Studio Support" />
     </a>
     <a href="https://visualstudio.microsoft.com/">
       <img src="https://img.shields.io/badge/Visual_Studio-2022-purple.svg" alt="Visual Studio" />
@@ -26,7 +26,7 @@
 
 ## 🌟 Overview
 
-**LocalPilot** is a powerful Visual Studio extension that integrates local Large Language Models (LLMs) via [Ollama](https://ollama.com). It provides a seamless, high-performance coding experience without the need for cloud-based subscriptions or data privacy concerns.
+**LocalPilot** is a powerful Visual Studio extension that integrates local Large Language Models (LLMs) through [LM Studio](https://lmstudio.ai/). It uses LM Studio's OpenAI-compatible local API, so inference remains on your machine.
 
 <p align="center">
   <img src="LocalPilot/Assets/Showcase_Mockup.png" width="800" height="450" alt="LocalPilot Showcase" />
@@ -60,7 +60,7 @@
   <tr>
     <td width="50%" valign="top">
       <h3>🛠️ Flexible Configuration</h3>
-      Easily manage your Ollama connection and assign different models for chat and autocomplete tasks.
+      Easily manage your LM Studio connection and assign different models for chat, autocomplete, and embeddings.
       <br/>
             <br/>
       <p align="center">
@@ -94,12 +94,11 @@
 ## 🛠️ Getting Started
 
 ### 1️⃣ Prerequisites
-You must have **Ollama** installed and running on your machine.
-- **Download**: [ollama.com](https://ollama.com)
-- **Launch a Model**: We recommend agentic, code-centric models like `qwen2.5-coder` or `llama3.1`.
-  ```bash
-  ollama run qwen2.5-coder:7b
-  ```
+You must have **LM Studio** installed with its Local Server running.
+- **Download**: [lmstudio.ai](https://lmstudio.ai/)
+- Download and load a code-focused instruct model in LM Studio.
+- Open **Developer**, start the Local Server, and enable the OpenAI-compatible API on port `1234`.
+- For semantic project search, also load an embedding model supported by LM Studio.
 
 ### 2️⃣ Installation
 1. Visit the **[Visual Studio Marketplace](https://marketplace.visualstudio.com/items?itemName=FutureStackSolution.LocalPilotFSS)**.
@@ -109,7 +108,7 @@ You must have **Ollama** installed and running on your machine.
 
 ### 3️⃣ Configuration
 Navigate to **Tools > Options > LocalPilot > Settings**.
-1. **Ollama Base URL**: Usually `http://localhost:11434`. Click **"Test Connection"** to verify.
+1. **LM Studio Base URL**: Usually `http://localhost:1234/v1`. The `/v1` suffix is added automatically if omitted. Click **"Test Connection"** to verify.
 2. **Model Assignments**: Assign preferred models for **Chat** and **Inline Completions**.
 
 > [!TIP]
@@ -162,14 +161,14 @@ We welcome community contributions! Whether it's bugs, features, or documentatio
 
 ### 🛠️ How to Help
 1. **Check Issues**: See the [Existing Issues](https://github.com/FutureStackSolution/LocalPilot/issues) to avoid duplicates.
-2. **Clear Reports**: For bugs, include your VS version, Ollama model, and reproduction steps.
+2. **Clear Reports**: For bugs, include your VS version, LM Studio version, loaded model, and reproduction steps.
 3. **Pull Requests**: Create a branch from `main`, ensure the project builds, and submit your PR with a clear description.
 
 ---
 
 ## 💻 Hardware Requirements
 
-Since **LocalPilot** runs Large Language Models (LLMs) **entirely on your local machine** via Ollama, your hardware performance directly impacts the speed and responsiveness of AI suggestions.
+Since **LocalPilot** runs Large Language Models (LLMs) **entirely on your local machine** via LM Studio, your hardware performance directly impacts the speed and responsiveness of AI suggestions.
 
 ### 🏁 Minimum Requirements
 *   **CPU**: Recent Multi-core processor (Intel i5/AMD Ryzen 5 or equivalent).
@@ -232,7 +231,7 @@ Since **LocalPilot** runs Large Language Models (LLMs) **entirely on your local 
 - **🧹 Architectural Streamlining**: Conducted a comprehensive codebase audit to remove orphaned services and dead code, including the legacy `LocalParserProvider` in favor of the high-performance `UniversalSemanticProvider`.
 - **🏗️ Consolidated Semantic Pipeline**: Refined the 3-Tier Semantic Priority Chain (`Roslyn` → `LSP` → `Universal`) to ensure zero-overlap and faster symbol discovery during complex refactoring turns.
 - **📦 Model & Registry Pruning**: Streamlined the `AgentModels` and `CapabilityCatalog` to reduce memory footprint and improve logic maintainability for the core agentic workflow.
-- **🧠 Decoupled & Resilient Embedding Engine**: Major architectural overhaul separating Chat and Background Indexing. LocalPilot now gracefully handles Ollama server drops with a robust Circuit Breaker and Exponential Backoff.
+- **🧠 Decoupled & Resilient Embedding Engine**: Chat and background indexing are separated, with a circuit breaker for LM Studio server interruptions.
 - **⚡ Dynamic Chunk Sizing**: Switched to dynamic character-count chunking (optimized for ~500 tokens) to vastly improve the quality and density of codebase vectors.
 - **🛠️ Configurable Background Concurrency**: Introduced a new user-facing setting (slider) to throttle or accelerate background indexing based on your specific machine's capabilities.
 - **🛡️ Keyword Search Fallback**: If you choose not to configure an Embedding model (or if your server trips the circuit breaker), LocalPilot will now instantly and gracefully fallback to a lightning-fast Keyword Search (BM25 style).
@@ -240,14 +239,14 @@ Since **LocalPilot** runs Large Language Models (LLMs) **entirely on your local 
 ### 🚀 v1.7 - The Connectivity & Reliability Update
 **"Smarter defaults, proactive error handling, and seamless first-run setup."**
 
-- **🛠️ First-Run Auto-Discovery ([#25](https://github.com/FutureStackSolution/LocalPilot/issues/25))**: Automatically detects available Ollama models upon first installation and configures the extension defaults (e.g., `qwen2.5-coder`, `llama3.1`), resolving the common `404 Not Found` error for new users.
-- **🛡️ Chat Connection Heartbeat**: The chat window now proactively validates the Ollama service and model selection, providing clear troubleshooting steps if the backend is unreachable or misconfigured.
+- **🛠️ First-Run Auto-Discovery**: Automatically detects models exposed by LM Studio's `/v1/models` endpoint and configures sensible defaults.
+- **🛡️ Chat Connection Heartbeat**: The chat window proactively validates the LM Studio server and model selection.
 
 ### 🚀 v1.6 - The Polyglot Reliability Update
 **"Smarter context, language-aware rename, and a hardened model pipeline."**
 
 - **🧠 Dedicated Embedding Model Setting**: The RAG / semantic search pipeline now uses a separate, independently configurable **Embedding Model** (default: `nomic-embed-text`). Embedding and chat models are now fully decoupled.
-- **🛡️ Embedding-Model Guard**: `OllamaService` now detects embed-only models (`nomic`, `bge-*`, `e5-*`, etc.) before sending them to `/api/chat` and surfaces a clear, actionable error message in the chat panel.
+- **🛡️ Embedding Support**: Semantic indexing uses LM Studio's OpenAI-compatible `/v1/embeddings` endpoint.
 - **🌐 Polyglot Rename (C++ / Python / TS / Go)**: Improved project-wide renaming reliability for non-C# languages using a robust grep-and-replace strategy.
 - **⚡ Context Window Fix (4096 → 16384+)**: Optimized dynamic context sizing to prevent tool-instruction truncation during complex agent sessions.
 - **📦 Prompt Cache Invalidation**: Automatic eviction of stale prompt templates after updates, ensuring the latest system instructions are always active.
@@ -300,8 +299,7 @@ Since **LocalPilot** runs Large Language Models (LLMs) **entirely on your local 
 - **✅ Pro Marketplace Branding**: Formally aligned all project identifiers with the official `FutureStackSolution` namespace.
 
 ### ✨ v1.0 - Initial Release
-- **Inline Ghost-Text**: Real-time code completions via Ollama.
+- **Inline Ghost-Text**: Real-time code completions via LM Studio.
 - **Interactive Chat Panel**: Full technical discussion window.
 - **Context Menu Actions**: Explain, Document, and Refactor support.
 - **Native VS Support**: Full theme awareness for Light and Dark modes.
-

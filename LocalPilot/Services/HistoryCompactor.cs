@@ -14,11 +14,11 @@ namespace LocalPilot.Services
     /// </summary>
     public class HistoryCompactor
     {
-        private readonly OllamaService _ollama;
+        private readonly LMStudioService _lmStudio;
 
-        public HistoryCompactor(OllamaService ollama)
+        public HistoryCompactor(LMStudioService lmStudio)
         {
-            _ollama = ollama;
+            _lmStudio = lmStudio;
         }
 
         public async Task<List<ChatMessage>> CompactIfNeededAsync(List<ChatMessage> history, string model, int threshold = 15)
@@ -30,7 +30,7 @@ namespace LocalPilot.Services
 
             // 🚀 WORLD-CLASS PERFORMANCE: Stable Prefix Strategy (KV-Cache Reuse)
             // We keep the first 3 messages (usually System + Initial Context + Initial Task) 
-            // completely unchanged. This allows Ollama to skip processing these tokens on every turn.
+            // completely unchanged. This lets LM Studio reuse a stable prompt prefix.
             var result = new List<ChatMessage>();
             var stablePrefix = history.Take(3).ToList();
             result.AddRange(stablePrefix);
@@ -80,7 +80,7 @@ namespace LocalPilot.Services
 
             try
             {
-                var options = new OllamaOptions { 
+                var options = new LMStudioOptions { 
                     Temperature = 0.0, 
                     NumPredict = 1024,
                     RequestTimeoutSeconds = 45 // 🚀 SAFETY: 45s cap for summarization
@@ -89,7 +89,7 @@ namespace LocalPilot.Services
                 
                 using (var cts = new CancellationTokenSource(TimeSpan.FromSeconds(45)))
                 {
-                    await foreach (var token in _ollama.StreamChatAsync(model, new List<ChatMessage> { 
+                    await foreach (var token in _lmStudio.StreamChatAsync(model, new List<ChatMessage> { 
                         new ChatMessage { Role = "user", Content = sb.ToString() } 
                     }, options, cts.Token))
                     {

@@ -46,7 +46,7 @@ namespace LocalPilot.Services
 
         private ProjectContextService() { }
 
-        public async Task IndexSolutionAsync(OllamaService ollama, CancellationToken ct = default)
+        public async Task IndexSolutionAsync(LMStudioService lmStudio, CancellationToken ct = default)
         {
             if (_isIndexing) return;
             if (!await _indexLock.WaitAsync(0)) return;
@@ -113,7 +113,7 @@ namespace LocalPilot.Services
                         if (filesToUpdate.Any())
                         {
                             LocalPilotLogger.Log($"Updating {filesToUpdate.Count} files in persistent storage...", LogCategory.Agent);
-                            await ParallelUpdateAsync(filesToUpdate, ollama, ct);
+                            await ParallelUpdateAsync(filesToUpdate, lmStudio, ct);
                             sw.Stop();
                             LocalPilotLogger.Log($"[RAG] SQLite sync complete in {sw.ElapsedMilliseconds}ms.", LogCategory.Performance);
                         }
@@ -128,7 +128,7 @@ namespace LocalPilot.Services
                     }
                 });
 
-                SetupIncrementalWatcher(ollama);
+                SetupIncrementalWatcher(lmStudio);
             }
             finally
             {
@@ -194,19 +194,19 @@ namespace LocalPilot.Services
             catch { return string.Empty; }
         }
 
-        private async Task ParallelUpdateAsync(List<string> files, OllamaService ollama, CancellationToken ct)
+        private async Task ParallelUpdateAsync(List<string> files, LMStudioService lmStudio, CancellationToken ct)
         {
             int concurrency = Math.Max(1, Math.Min(8, LocalPilotSettings.Instance.BackgroundIndexingConcurrency));
             int batchSize = 50; // Process 50 files per transaction batch
             
             for (int i = 0; i < files.Count; i += batchSize)
             {
-                if (ollama.CircuitBreakerTripped || ct.IsCancellationRequested || GlobalPriorityGuard.ShouldYield()) break;
+                if (lmStudio.CircuitBreakerTripped || ct.IsCancellationRequested || GlobalPriorityGuard.ShouldYield()) break;
 
                 var currentBatch = files.Skip(i).Take(batchSize).ToList();
                 var batchData = new ConcurrentBag<(string path, string content, List<string> chunks, List<float[]> vectors)>();
 
-                // 1. Parallel Prefetch & Embed (CPU + Ollama)
+                // 1. Parallel prefetch and embedding requests (CPU + LM Studio).
                 using (var semaphore = new SemaphoreSlim(concurrency))
                 {
                     var tasks = currentBatch.Select(async file =>
@@ -223,7 +223,7 @@ namespace LocalPilot.Services
                             var chunks = GetSemanticChunks(content, Path.GetExtension(file).ToLower());
                             if (!chunks.Any()) return;
 
-                            var vectors = await ollama.GetEmbeddingsBatchAsync(LocalPilotSettings.Instance.EmbeddingModel, chunks, ct);
+                            var vectors = await lmStudio.GetEmbeddingsBatchAsync(LocalPilotSettings.Instance.EmbeddingModel, chunks, ct);
                             if (vectors != null)
                             {
                                 batchData.Add((GetRelativePath(file), content, chunks, vectors));
@@ -390,15 +390,15 @@ namespace LocalPilot.Services
             return chunks.Distinct().ToList();
         }
 
-        public async Task<string> SearchContextAsync(OllamaService ollama, string query, int topN = 5, CancellationToken ct = default)
+        public async Task<string> SearchContextAsync(LMStudioService lmStudio, string query, int topN = 5, CancellationToken ct = default)
         {
             if (string.IsNullOrWhiteSpace(query)) return string.Empty;
 
             string embeddingModel = LocalPilotSettings.Instance.EmbeddingModel;
             Task<float[]> queryVectorTask = null;
-            if (!string.IsNullOrWhiteSpace(embeddingModel) && !ollama.CircuitBreakerTripped)
+            if (!string.IsNullOrWhiteSpace(embeddingModel) && !lmStudio.CircuitBreakerTripped)
             {
-                queryVectorTask = ollama.GetEmbeddingsAsync(embeddingModel, query);
+                queryVectorTask = lmStudio.GetEmbeddingsAsync(embeddingModel, query);
             }
 
             // 🚀 EXPERT: Use the global lock even for reads to prevent 'Database is locked' 
@@ -598,7 +598,7 @@ namespace LocalPilot.Services
             catch { }
         }
 
-        private void SetupIncrementalWatcher(OllamaService ollama)
+        private void SetupIncrementalWatcher(LMStudioService lmStudio)
         {
             if (_watcher != null) return;
             try
@@ -628,7 +628,7 @@ namespace LocalPilot.Services
                         }
                         
                         LocalPilotLogger.Log("Incremental changes detected. Re-indexing...", LogCategory.Storage);
-                        await IndexSolutionAsync(ollama, _watcherCts.Token);
+                        await IndexSolutionAsync(lmStudio, _watcherCts.Token);
                     }
                 });
             }

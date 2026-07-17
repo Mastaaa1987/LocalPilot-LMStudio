@@ -58,20 +58,20 @@ namespace LocalPilot.Services
         public bool HasTool(string name) => _tools.ContainsKey(name);
 
         /// <summary>
-        /// Generates tool definitions in Ollama's native format for the /api/chat tools parameter.
-        /// This enables structured tool calling — Ollama returns tool_calls as JSON objects,
+        /// Generates OpenAI-compatible tool definitions for LM Studio.
+        /// This enables structured tool calling through `/v1/chat/completions`,
         /// not embedded in text, eliminating all parsing/nudging issues.
         /// </summary>
-        public List<OllamaToolDefinition> GetOllamaToolDefinitions()
+        public List<LMStudioToolDefinition> GetLMStudioToolDefinitions()
         {
-            var definitions = new List<OllamaToolDefinition>();
+            var definitions = new List<LMStudioToolDefinition>();
             
             foreach (var tool in _tools.Values)
             {
-                var def = new OllamaToolDefinition
+                var def = new LMStudioToolDefinition
                 {
                     Type = "function",
-                    Function = new OllamaFunctionDefinition
+                    Function = new LMStudioFunctionDefinition
                     {
                         Name = tool.Name,
                         Description = tool.Description,
@@ -86,14 +86,14 @@ namespace LocalPilot.Services
 
         /// <summary>
         /// Parses our simple parameter schema strings (e.g. '{ "path": "string" }') 
-        /// into Ollama's JSON Schema format.
+        /// into the JSON Schema format expected by OpenAI-compatible tools.
         /// </summary>
-        private OllamaParameterDefinition ParseParameterSchema(string schema)
+        private LMStudioParameterDefinition ParseParameterSchema(string schema)
         {
-            var paramDef = new OllamaParameterDefinition
+            var paramDef = new LMStudioParameterDefinition
             {
                 Type = "object",
-                Properties = new Dictionary<string, OllamaPropertyDefinition>(),
+                Properties = new Dictionary<string, LMStudioPropertyDefinition>(),
                 Required = new List<string>()
             };
 
@@ -108,7 +108,7 @@ namespace LocalPilot.Services
                     bool isOptional = val.Contains("(optional)");
                     string propType = val.Replace("(optional)", "").Trim();
 
-                    paramDef.Properties[prop.Name] = new OllamaPropertyDefinition
+                    paramDef.Properties[prop.Name] = new LMStudioPropertyDefinition
                     {
                         Type = propType == "integer" ? "integer" : "string",
                         Description = $"The {prop.Name} parameter"

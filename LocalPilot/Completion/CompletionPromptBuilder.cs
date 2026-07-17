@@ -3,7 +3,7 @@ using LocalPilot.Settings;
 namespace LocalPilot.Completion
 {
     /// <summary>
-    /// Builds the prompt that is sent to Ollama for inline completion.
+    /// Builds the prompt that is sent to LM Studio for inline completion.
     /// Mirrors the FIM (Fill-In-the-Middle) technique used by Copilot.
     /// </summary>
     public class CompletionPromptBuilder

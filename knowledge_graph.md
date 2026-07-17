@@ -1,6 +1,6 @@
 # LocalPilot Project Knowledge Graph
 
-LocalPilot is a privacy-first, agent-driven AI pair programmer for Visual Studio. It leverages local LLMs (via Ollama) and deep IDE integration to provide autonomous coding capabilities.
+LocalPilot is a privacy-first, agent-driven AI pair programmer for Visual Studio. It uses local LLMs through LM Studio's OpenAI-compatible API and deep IDE integration.
 
 ## 🏗️ System Architecture
 
@@ -9,7 +9,7 @@ LocalPilot follows an **Agentic OODA Loop** (Observe, Orient, Decide, Act) archi
 ```mermaid
 graph TD
     UI[LocalPilotChatControl] --> AM[AgentOrchestrator]
-    AM --> OS[OllamaService]
+    AM --> OS[LMStudioService]
     AM --> TR[ToolRegistry]
     AM --> PC[ProjectContextService]
     AM --> RS[RoslynSemanticProvider]
@@ -35,7 +35,7 @@ graph TD
 | **StorageService** | **The Persistence Engine**. | **SQLite WAL Mode**, FTS5 Search, Busy-Timeout (5s), Self-Healing Initialization. |
 | **AgentOrchestrator** | The "Brain". Manages the autonomous loop. | **Performance Shield**, Context Budgeting (2k limit), OODA Orientation. |
 | **GlobalPriorityGuard** | Resource Coordinator. | **Yield-on-Action**, 30s Smart Cooldown, CancellationToken-based abortion. |
-| **OllamaService** | LLM Interface. | **60s Request Timeout**, Circuit Breaker, Native Tool Calling, Text-Only Fallback. |
+| **LMStudioService** | OpenAI-compatible local LLM interface. | Request timeout, circuit breaker, streaming tool calls, text-only fallback. |
 | **ProjectContextService**| RAG Layer. Semantic code search. | **Differential SQLite Sync**, Roslyn Chunking, **2MB File Cap**. |
 | **NexusService** | Full-Stack Bridge. Maps dependencies. | **Persistent Graph Storage**, Cross-Stack Trace (C# to TS/TSX). |
 | **RoslynSemanticProvider**| Semantic Intelligence. | Neighborhood Context, Project-wide Rename, Semantic Diagnostics. |

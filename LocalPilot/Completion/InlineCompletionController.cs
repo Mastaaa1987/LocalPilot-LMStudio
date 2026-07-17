@@ -14,7 +14,7 @@ namespace LocalPilot.Completion
 {
     /// <summary>
     /// Listens for text changes in the editor and triggers an inline
-    /// completion request to Ollama after a configurable debounce delay.
+    /// completion request to LM Studio after a configurable debounce delay.
     /// Ghost-text is displayed as an adornment (see GhostTextAdornment).
     /// </summary>
     [Export(typeof(IWpfTextViewCreationListener))]
@@ -25,8 +25,8 @@ namespace LocalPilot.Completion
         [Import] internal ITextDocumentFactoryService TextDocumentFactory { get; set; }
         [Import] internal ICompletionBroker CompletionBroker { get; set; }
 
-        // Shared OllamaService instance across all editor tabs to unify circuit breaker state
-        private static readonly OllamaService _sharedOllama = new OllamaService(LocalPilotSettings.Instance.OllamaBaseUrl);
+        // Shared LM Studio service across all editor tabs to unify circuit-breaker state.
+        private static readonly LMStudioService _sharedLMStudio = new LMStudioService(LocalPilotSettings.Instance.LMStudioBaseUrl);
 
         private IWpfTextView _view;
         private ITextDocument _document;
@@ -169,19 +169,19 @@ namespace LocalPilot.Completion
                         _ => 256
                     };
 
-                    var opts = new OllamaOptions
+                    var opts = new LMStudioOptions
                     {
                         Temperature = perfMode == PerformanceMode.Fast ? 0.4 : (perfMode == PerformanceMode.HighAccuracy ? 0.1 : 0.2),
                         NumPredict = maxTokens,
                         Stop = new System.Collections.Generic.List<string> { "\n\n\n", "</MID>" }
                     };
 
-                    _sharedOllama.UpdateBaseUrl(LocalPilotSettings.Instance.OllamaBaseUrl);
+                    _sharedLMStudio.UpdateBaseUrl(LocalPilotSettings.Instance.LMStudioBaseUrl);
 
                     var sb = new StringBuilder(256);
                     DateTime lastUiUpdate = DateTime.MinValue;
 
-                    await foreach (var chunk in _sharedOllama.StreamCompletionAsync(
+                    await foreach (var chunk in _sharedLMStudio.StreamCompletionAsync(
                         LocalPilotSettings.Instance.CompletionModel, prompt, opts, token).ConfigureAwait(false))
                     {
                         if (token.IsCancellationRequested) break;

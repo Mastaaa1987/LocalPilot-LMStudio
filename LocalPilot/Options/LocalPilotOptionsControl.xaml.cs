@@ -14,7 +14,7 @@ namespace LocalPilot.Options
 {
     public partial class LocalPilotOptionsControl : UserControl
     {
-        private readonly OllamaService _ollama = new OllamaService();
+        private readonly LMStudioService _lmStudio = new LMStudioService();
         private CancellationTokenSource _cts = new CancellationTokenSource();
         private bool _isSaving = false;
 
@@ -73,7 +73,7 @@ namespace LocalPilot.Options
         // ── Load settings into all controls ───────────────────────────────────
         public void LoadSettings(LocalPilotSettings s)
         {
-            TxtBaseUrl.Text          = s.OllamaBaseUrl;
+            TxtBaseUrl.Text          = s.LMStudioBaseUrl;
 
             
             // Intelligence Mode
@@ -116,7 +116,7 @@ namespace LocalPilot.Options
             var token = _cts.Token;
             _ = ThreadHelper.JoinableTaskFactory.RunAsync(async () =>
             {
-                await LoadModelsAsync(s.OllamaBaseUrl, token);
+                await LoadModelsAsync(s.LMStudioBaseUrl, token);
             });
         }
 
@@ -134,7 +134,7 @@ namespace LocalPilot.Options
                 // Only save fields from the active tab to prevent multi-page overwrites
                 if (MainTabControl.SelectedIndex == 0) // General
                 {
-                    if (TxtBaseUrl != null) s.OllamaBaseUrl = TxtBaseUrl.Text.Trim();
+                    if (TxtBaseUrl != null) s.LMStudioBaseUrl = TxtBaseUrl.Text.Trim();
                     
                     s.EnableInlineCompletion = ChkEnableInline?.IsChecked == true;
                     s.ShowCompletionGhost    = ChkShowGhost?.IsChecked    == true;
@@ -193,18 +193,18 @@ namespace LocalPilot.Options
                     // Busy State
                     BtnTestConnection.IsEnabled = false;
                     BtnTestConnection.Content = "Testing...";
-                    TxtConnectionResult.Text = "Checking Ollama status...";
+                    TxtConnectionResult.Text = "Checking LM Studio status...";
                     TxtConnectionResult.Foreground = (Brush)this.Resources["LpMutedFgBrush"];
                     TxtConnectionResult.Visibility = Visibility.Visible;
 
-                    _ollama.UpdateBaseUrl(url);
-                    bool ok = await _ollama.IsAvailableAsync();
+                    _lmStudio.UpdateBaseUrl(url);
+                    bool ok = await _lmStudio.IsAvailableAsync();
 
                     await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
                     
                     if (ok)
                     {
-                        TxtConnectionResult.Text = "✓  Ollama is running and reachable!";
+                        TxtConnectionResult.Text = "✓  LM Studio is running and reachable!";
                         TxtConnectionResult.Foreground = new SolidColorBrush(Color.FromRgb(0x4E, 0xC9, 0xB0));
                         SetConnectionStatus(true);
                         
@@ -212,16 +212,16 @@ namespace LocalPilot.Options
                         if (_cts == null) _cts = new CancellationTokenSource();
                         await LoadModelsAsync(url, _cts.Token);
 
-                        MessageBox.Show("Successfully connected to Ollama!", "LocalPilot",
+                        MessageBox.Show("Successfully connected to LM Studio!", "LocalPilot",
                                         MessageBoxButton.OK, MessageBoxImage.Information);
                     }
                     else
                     {
-                        TxtConnectionResult.Text = "✗  Cannot reach Ollama. Ensure it's running at the specified URL.";
+                        TxtConnectionResult.Text = "✗  Cannot reach LM Studio. Start its Local Server and verify the URL.";
                         TxtConnectionResult.Foreground = new SolidColorBrush(Color.FromRgb(0xF4, 0x47, 0x47));
                         SetConnectionStatus(false);
                         
-                        MessageBox.Show("Failed to connect to Ollama. Please verify the service is running.", "Connection Failed",
+                        MessageBox.Show("Failed to connect to LM Studio. Please start the Local Server.", "Connection Failed",
                                         MessageBoxButton.OK, MessageBoxImage.Warning);
                     }
                 }
@@ -429,8 +429,8 @@ namespace LocalPilot.Options
                 if (string.IsNullOrWhiteSpace(baseUrl) || !baseUrl.Contains("://"))
                     return;
 
-                _ollama.UpdateBaseUrl(baseUrl);
-                var models = await _ollama.GetAvailableModelsAsync(ct);
+                _lmStudio.UpdateBaseUrl(baseUrl);
+                var models = await _lmStudio.GetAvailableModelsAsync(ct);
 
                 if (ct.IsCancellationRequested) return;
 
@@ -467,7 +467,7 @@ namespace LocalPilot.Options
                 var item = new ComboBoxItem { Content = m };
                 cmb.Items.Add(item);
 
-                // Exact match or contains (handles cases where ollama adds :latest etc)
+                // Exact match or contains, to tolerate backend-specific model aliases.
                 if (m.Equals(selected, StringComparison.OrdinalIgnoreCase))
                     cmb.SelectedItem = item;
             }
@@ -490,7 +490,7 @@ namespace LocalPilot.Options
 
         private async Task RefreshConnectionStatusAsync()
         {
-            bool ok = await _ollama.IsAvailableAsync();
+            bool ok = await _lmStudio.IsAvailableAsync();
             await ThreadHelper.JoinableTaskFactory.SwitchToMainThreadAsync();
             SetConnectionStatus(ok);
         }
@@ -500,7 +500,7 @@ namespace LocalPilot.Options
             StatusDot.Fill = connected
                 ? new SolidColorBrush(Color.FromRgb(0x4E, 0xC9, 0xB0))
                 : new SolidColorBrush(Color.FromRgb(0xF4, 0x47, 0x47));
-            StatusText.Text = connected ? "Ollama Connected" : "Ollama Offline";
+            StatusText.Text = connected ? "LM Studio Connected" : "LM Studio Offline";
         }
     }
 }
